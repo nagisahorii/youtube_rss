@@ -112,8 +112,9 @@
     "https://www.youtube.com/feeds/videos.xml?channel_id=UCqbGz4MmKikm10uMuoGI45Q";
 
   const PROXIES = [
+    (url) => "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(url),
+    (url) => "https://corsproxy.io/?" + encodeURIComponent(url),
     (url) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(url),
-    (url) => "https://cors.isomorphic-git.org/" + url,
   ];
 
   async function fetchViaProxies(url) {
