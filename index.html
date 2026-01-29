@@ -42,47 +42,60 @@
   <div class="container" id="videos"></div>
 
   <script>
-    const RSS_URL =
-      "https://www.youtube.com/feeds/videos.xml?channel_id=UCqbGz4MmKikm10uMuoGI45Q";
-    const CORS_PROXY = "https://cors.isomorphic-git.org/";
+  const RSS_URL =
+    "https://www.youtube.com/feeds/videos.xml?channel_id=UCqbGz4MmKikm10uMuoGI45Q";
 
-    fetch(CORS_PROXY + RSS_URL)
-      .then(res => res.text())
-      .then(xmlText => {
-        const parser = new DOMParser();
-        const xml = parser.parseFromString(xmlText, "text/xml");
-        const entries = Array.from(xml.getElementsByTagName("entry")).slice(0, 3);
+  const PROXIES = [
+    (url) => "https://cors.isomorphic-git.org/" + url,
+    (url) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(url),
+  ];
 
-        const container = document.getElementById("videos");
+  async function fetchViaProxies(url) {
+    let lastErr;
+    for (const makeUrl of PROXIES) {
+      try {
+        const res = await fetch(makeUrl(url), { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.text();
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    throw lastErr;
+  }
 
-        entries.forEach(entry => {
-          const title = entry.getElementsByTagName("title")[0].textContent;
-          const link = entry.getElementsByTagName("link")[0].getAttribute("href");
-          const videoId = entry
-            .getElementsByTagName("yt:videoId")[0]
-            .textContent;
+  fetchViaProxies(RSS_URL)
+    .then((xmlText) => {
+      const parser = new DOMParser();
+      const xml = parser.parseFromString(xmlText, "text/xml");
+      const entries = Array.from(xml.getElementsByTagName("entry")).slice(0, 3);
 
-          const thumbnail = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+      const container = document.getElementById("videos");
+      container.innerHTML = "";
 
-          const a = document.createElement("a");
-          a.className = "card";
-          a.href = link;
-          a.target = "_blank";
-          a.rel = "noopener";
+      entries.forEach((entry) => {
+        const title = entry.getElementsByTagName("title")[0].textContent;
+        const link = entry.getElementsByTagName("link")[0].getAttribute("href");
+        const videoId = entry.getElementsByTagName("yt:videoId")[0].textContent;
+        const thumbnail = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 
-          a.innerHTML = `
-            <img src="${thumbnail}" alt="">
-            <div class="card-title">${title}</div>
-          `;
+        const a = document.createElement("a");
+        a.className = "card";
+        a.href = link;
+        a.target = "_blank";
+        a.rel = "noopener";
 
-          container.appendChild(a);
-        });
-      })
-      .catch(err => {
-        console.error(err);
-        document.getElementById("videos").innerText =
-          "動画を読み込めませんでした";
+        a.innerHTML = `
+          <img src="${thumbnail}" alt="">
+          <div class="card-title">${title}</div>
+        `;
+        container.appendChild(a);
       });
-  </script>
+    })
+    .catch((err) => {
+      console.error(err);
+      document.getElementById("videos").innerText = "動画を読み込めませんでした";
+    });
+</script>
 </body>
 </html>
