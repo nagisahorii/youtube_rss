@@ -46,7 +46,7 @@
       "https://www.youtube.com/feeds/videos.xml?channel_id=UCqbGz4MmKikm10uMuoGI45Q";
     const CORS_PROXY = "https://cors.isomorphic-git.org/";
 
-    fetch(CORS_PROXY + encodeURIComponent(RSS_URL))
+    fetch(CORS_PROXY + RSS_URL)
       .then(res => res.text())
       .then(xmlText => {
         const parser = new DOMParser();
