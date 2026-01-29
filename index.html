@@ -111,33 +111,33 @@
   const RSS_URL =
     "https://www.youtube.com/feeds/videos.xml?channel_id=UCqbGz4MmKikm10uMuoGI45Q";
 
+  function fetchWithTimeout(url, ms) {
+    var controller = new AbortController();
+    var timer = setTimeout(function() { controller.abort(); }, ms);
+    return fetch(url, { signal: controller.signal })
+      .finally(function() { clearTimeout(timer); });
+  }
+
   async function fetchRSS(url) {
     var errors = [];
+    var proxies = [
+      { name: "allorigins", make: function(u) { return "https://api.allorigins.win/get?url=" + encodeURIComponent(u); }, json: true },
+      { name: "corsproxy", make: function(u) { return "https://corsproxy.io/?" + encodeURIComponent(u); }, json: false },
+      { name: "codetabs", make: function(u) { return "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(u); }, json: false },
+    ];
 
-    // Try corsproxy.io
-    try {
-      var res = await fetch("https://corsproxy.io/?" + encodeURIComponent(url));
-      if (res.ok) return await res.text();
-      errors.push("corsproxy.io: HTTP " + res.status);
-    } catch (e) { errors.push("corsproxy.io: " + e.message); }
-
-    // Try allorigins (JSON endpoint)
-    try {
-      var res2 = await fetch("https://api.allorigins.win/get?url=" + encodeURIComponent(url));
-      if (res2.ok) {
-        var json = await res2.json();
-        return json.contents;
-      }
-      errors.push("allorigins: HTTP " + res2.status);
-    } catch (e) { errors.push("allorigins: " + e.message); }
-
-    // Try codetabs
-    try {
-      var res3 = await fetch("https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(url));
-      if (res3.ok) return await res3.text();
-      errors.push("codetabs: HTTP " + res3.status);
-    } catch (e) { errors.push("codetabs: " + e.message); }
-
+    for (var i = 0; i < proxies.length; i++) {
+      var p = proxies[i];
+      try {
+        var res = await fetchWithTimeout(p.make(url), 8000);
+        if (!res.ok) { errors.push(p.name + ": HTTP " + res.status); continue; }
+        if (p.json) {
+          var j = await res.json();
+          return j.contents;
+        }
+        return await res.text();
+      } catch (e) { errors.push(p.name + ": " + e.message); }
+    }
     throw new Error(errors.join(" | "));
   }
 
