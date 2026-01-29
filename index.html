@@ -2,52 +2,118 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>理学ボディ YouTube</title>
   <style>
+    * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
-      background: #f7f7f7;
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", sans-serif;
+      background: #fff;
+      color: #37352f;
+    }
+    .header {
+      padding: 12px 16px 4px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #787774;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .header svg {
+      width: 16px;
+      height: 16px;
+      fill: #ff0000;
     }
     .container {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 16px;
-      padding: 16px;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 12px;
+      padding: 8px 16px 16px;
     }
     .card {
       background: #fff;
-      border-radius: 8px;
+      border-radius: 6px;
       overflow: hidden;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      border: 1px solid #e9e9e7;
       text-decoration: none;
-      color: #222;
+      color: #37352f;
+      transition: box-shadow 0.15s;
     }
-    .card img {
+    .card:hover {
+      box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+    }
+    .thumb-wrap {
+      position: relative;
       width: 100%;
       aspect-ratio: 16 / 9;
+      overflow: hidden;
+      background: #f1f1ef;
+    }
+    .thumb-wrap img {
+      width: 100%;
+      height: 100%;
       object-fit: cover;
       display: block;
     }
+    .duration {
+      position: absolute;
+      bottom: 6px;
+      right: 6px;
+      background: rgba(0,0,0,0.8);
+      color: #fff;
+      font-size: 11px;
+      padding: 2px 4px;
+      border-radius: 3px;
+    }
+    .card-body {
+      padding: 10px 12px;
+    }
     .card-title {
-      padding: 12px;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 600;
       line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .card-date {
+      font-size: 11px;
+      color: #a5a29a;
+      margin-top: 4px;
+    }
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #a5a29a;
+      font-size: 13px;
+    }
+    .error {
+      text-align: center;
+      padding: 40px;
+      color: #eb5757;
+      font-size: 13px;
     }
   </style>
 </head>
 <body>
-  <h1>表示テスト OK2</h1>
-  <div class="container" id="videos"></div>
+  <div class="header">
+    <svg viewBox="0 0 24 24"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 0 0 .5 6.2 31.9 31.9 0 0 0 0 12a31.9 31.9 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1A31.9 31.9 0 0 0 24 12a31.9 31.9 0 0 0-.5-5.8z"/><polygon points="9.75,15.02 15.5,12 9.75,8.98" fill="#fff"/></svg>
+    最新の動画
+  </div>
+  <div class="container" id="videos">
+    <div class="loading">読み込み中…</div>
+  </div>
 
   <script>
   const RSS_URL =
     "https://www.youtube.com/feeds/videos.xml?channel_id=UCqbGz4MmKikm10uMuoGI45Q";
 
   const PROXIES = [
-    (url) => "https://cors.isomorphic-git.org/" + url,
     (url) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(url),
+    (url) => "https://cors.isomorphic-git.org/" + url,
   ];
 
   async function fetchViaProxies(url) {
@@ -55,7 +121,7 @@
     for (const makeUrl of PROXIES) {
       try {
         const res = await fetch(makeUrl(url), { cache: "no-store" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) throw new Error("HTTP " + res.status);
         return await res.text();
       } catch (e) {
         lastErr = e;
@@ -64,38 +130,57 @@
     throw lastErr;
   }
 
-  fetchViaProxies(RSS_URL)
-    .then((xmlText) => {
-      const parser = new DOMParser();
-      const xml = parser.parseFromString(xmlText, "text/xml");
-      const entries = Array.from(xml.getElementsByTagName("entry")).slice(0, 3);
+  function formatDate(dateStr) {
+    const d = new Date(dateStr);
+    const y = d.getFullYear();
+    const m = d.getMonth() + 1;
+    const day = d.getDate();
+    return y + "/" + m + "/" + day;
+  }
 
-      const container = document.getElementById("videos");
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  fetchViaProxies(RSS_URL)
+    .then(function (xmlText) {
+      var parser = new DOMParser();
+      var xml = parser.parseFromString(xmlText, "text/xml");
+      var entries = Array.from(xml.getElementsByTagName("entry")).slice(0, 6);
+
+      var container = document.getElementById("videos");
       container.innerHTML = "";
 
-      entries.forEach((entry) => {
-        const title = entry.getElementsByTagName("title")[0].textContent;
-        const link = entry.getElementsByTagName("link")[0].getAttribute("href");
-        const videoId = entry.getElementsByTagName("yt:videoId")[0].textContent;
-        const thumbnail = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+      entries.forEach(function (entry) {
+        var title = entry.getElementsByTagName("title")[0].textContent;
+        var link = entry.getElementsByTagName("link")[0].getAttribute("href");
+        var videoId = entry.getElementsByTagName("yt:videoId")[0].textContent;
+        var thumbnail = "https://i.ytimg.com/vi/" + videoId + "/mqdefault.jpg";
+        var published = entry.getElementsByTagName("published")[0].textContent;
 
-        const a = document.createElement("a");
+        var a = document.createElement("a");
         a.className = "card";
         a.href = link;
         a.target = "_blank";
         a.rel = "noopener";
 
-        a.innerHTML = `
-          <img src="${thumbnail}" alt="">
-          <div class="card-title">${title}</div>
-        `;
+        a.innerHTML =
+          '<div class="thumb-wrap"><img src="' + thumbnail + '" alt="" loading="lazy"></div>' +
+          '<div class="card-body">' +
+          '<div class="card-title">' + escapeHtml(title) + '</div>' +
+          '<div class="card-date">' + formatDate(published) + '</div>' +
+          '</div>';
+
         container.appendChild(a);
       });
     })
-    .catch((err) => {
+    .catch(function (err) {
       console.error(err);
-      document.getElementById("videos").innerText = "動画を読み込めませんでした";
+      document.getElementById("videos").innerHTML =
+        '<div class="error">動画を読み込めませんでした</div>';
     });
-</script>
+  </script>
 </body>
 </html>
