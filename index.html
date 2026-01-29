@@ -111,24 +111,34 @@
   const RSS_URL =
     "https://www.youtube.com/feeds/videos.xml?channel_id=UCqbGz4MmKikm10uMuoGI45Q";
 
-  const PROXIES = [
-    (url) => "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(url),
-    (url) => "https://corsproxy.io/?" + encodeURIComponent(url),
-    (url) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(url),
-  ];
+  async function fetchRSS(url) {
+    var errors = [];
 
-  async function fetchViaProxies(url) {
-    let lastErr;
-    for (const makeUrl of PROXIES) {
-      try {
-        const res = await fetch(makeUrl(url), { cache: "no-store" });
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        return await res.text();
-      } catch (e) {
-        lastErr = e;
+    // Try corsproxy.io
+    try {
+      var res = await fetch("https://corsproxy.io/?" + encodeURIComponent(url));
+      if (res.ok) return await res.text();
+      errors.push("corsproxy.io: HTTP " + res.status);
+    } catch (e) { errors.push("corsproxy.io: " + e.message); }
+
+    // Try allorigins (JSON endpoint)
+    try {
+      var res2 = await fetch("https://api.allorigins.win/get?url=" + encodeURIComponent(url));
+      if (res2.ok) {
+        var json = await res2.json();
+        return json.contents;
       }
-    }
-    throw lastErr;
+      errors.push("allorigins: HTTP " + res2.status);
+    } catch (e) { errors.push("allorigins: " + e.message); }
+
+    // Try codetabs
+    try {
+      var res3 = await fetch("https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(url));
+      if (res3.ok) return await res3.text();
+      errors.push("codetabs: HTTP " + res3.status);
+    } catch (e) { errors.push("codetabs: " + e.message); }
+
+    throw new Error(errors.join(" | "));
   }
 
   function formatDate(dateStr) {
@@ -145,11 +155,16 @@
     return div.innerHTML;
   }
 
-  fetchViaProxies(RSS_URL)
+  fetchRSS(RSS_URL)
     .then(function (xmlText) {
       var parser = new DOMParser();
       var xml = parser.parseFromString(xmlText, "text/xml");
+
+      var parseError = xml.querySelector("parsererror");
+      if (parseError) throw new Error("XML parse error");
+
       var entries = Array.from(xml.getElementsByTagName("entry")).slice(0, 6);
+      if (entries.length === 0) throw new Error("No entries found");
 
       var container = document.getElementById("videos");
       container.innerHTML = "";
